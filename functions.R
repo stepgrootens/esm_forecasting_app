@@ -3,9 +3,9 @@
 # Designed to be sourced by both main_analysis.R and a Shiny app.
 
 # Required packages:
-# install.packages(c("openesm", "dplyr", "tidyr", "purrr", "ggplot2",
-#                    "tibble", "lme4", "lmerTest", "broom.mixed",
-#                    "performance"))
+install.packages(c("openesm", "dplyr", "tidyr", "purrr", "ggplot2",
+                   "tibble", "lme4", "lmerTest", "broom.mixed",
+                    "performance"))
 
 load_hoebeke_data <- function(dataset_id = "0013_hoebeke") {
   if (!requireNamespace("openesm", quietly = TRUE)) {
