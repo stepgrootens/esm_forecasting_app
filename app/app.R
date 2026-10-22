@@ -1,6 +1,6 @@
 
 # ============================================================
-# ESM Forecasting App — Version 2
+# ESM Forecasting App — Version 3
 # ============================================================
 # Upload individual-level ESM data, generate forecasts,
 # and display forecasts.
@@ -597,13 +597,54 @@ server <- function(input, output, session) {
   })
   
   
-  # Display cross-validation status
+  # Display accuracy status and explanation
   output$cv_status <- renderUI({
+    
     result <- cv_result()
-    if (is.null(result)) return(p("Click 'Calculate accuracy' to evaluate the model."))
-    p("Cross-validation completed: ", result$total_model_fits,
-      " fits attempted; ", result$fit_failures, " failures.")
+    
+    if (is.null(result)) {
+      return(
+        p("Select an initial training window and click 'Calculate accuracy'.")
+      )
+    }
+    
+    tagList(
+      
+      p(
+        strong("Cross-validation completed. "),
+        paste(
+          result$total_model_fits,
+          "model fits attempted;",
+          result$fit_failures,
+          "fitting/forecasting failures."
+        )
+      ),
+      
+      p(
+        "Accuracy was evaluated using expanding-window",
+        "cross-validation. At each step, the model was",
+        "trained on the available historical observations",
+        "and evaluated against actual observations at",
+        "1-day and 7-day forecast horizons."
+      ),
+      
+      p(
+        strong("How to interpret MAE: "),
+        "Mean Absolute Error (MAE) is the average absolute",
+        "difference between predicted and observed values.",
+        "Lower MAE indicates better forecasting accuracy.",
+        "MAE is expressed in the same units as the target variable."
+      ),
+      
+      p(
+        strong("Important: "),
+        "The two horizons may use different numbers of",
+        "evaluation points. Therefore, their MAE values",
+        "are not necessarily directly comparable."
+      )
+    )
   })
+  
   
   # Display accuracy table
   output$cv_results <- renderTable({
@@ -730,10 +771,86 @@ server <- function(input, output, session) {
   
   
   output$forecast_status <- renderUI({
+    
     result <- forecast_result()
-    if (is.null(result)) return(p("Select a model and click 'Generate forecast'."))
-    p("Forecast generated: ", nrow(result), " future observations predicted.")
+    
+    if (is.null(result)) {
+      return(
+        p("Select a model and click 'Generate forecast'.")
+      )
+    }
+    
+    # Short explanation of the selected model
+    model_description <- switch(
+      input$model,
+      
+      "Naive" = paste0(
+        "The Naive model uses the last available value of ",
+        input$target,
+        " as the prediction for all future observations."
+      ),
+      
+      "ARIMA" = paste0(
+        "ARIMA uses historical values of ", input$target,
+        ", including patterns in its past changes and ",
+        "forecast errors, to predict future values. ",
+        "It does not use external predictors."
+      ),
+      
+      "ARIMAX" = paste0(
+        "ARIMAX uses historical values of ", input$target,
+        " together with the selected external predictors ",
+        "to predict future values."
+      )
+    )
+    
+    tagList(
+      
+      p(
+        strong("Forecast generated successfully. "),
+        paste(
+          nrow(result),
+          "future observations predicted."
+        )
+      ),
+      
+      p(
+        strong("How this model works: "),
+        model_description
+      ),
+      
+      if (input$model %in% c("ARIMA", "ARIMAX")) {
+        p(
+          paste(
+            "Model fitted using",
+            nrow(uploaded_data()),
+            "observations. Caution: Forecasts based on",
+            "limited historical data may be unreliable."
+          )
+        )
+      },
+      
+      if (input$model == "ARIMAX") {
+        p(
+          strong("Note about ARIMAX forecasts: "),
+          paste0(
+            "To predict future values of ", input$target,
+            ", ARIMAX also needs future values of the selected ",
+            "predictors. Because these values are not yet known, ",
+            "this app assumes that each predictor will remain at ",
+            "its historical mean (its average value across the ",
+            "available observations) throughout the forecast period. ",
+            "Importantly, the 95% prediction intervals assume these ",
+            "future predictor values are fixed at their historical means. ",
+            "They do not account for uncertainty about the actual ",
+            "future values of the predictors."
+          )
+        )
+      }
+    )
   })
+  
+  
   
   output$forecast_plot <- renderPlot({
     
