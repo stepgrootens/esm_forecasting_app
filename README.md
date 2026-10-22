@@ -102,6 +102,7 @@ The statistical analysis uses the `0013_hoebeke` dataset from [OpenESM](https://
 ## Refrences
 Hyndman, R. J., & Khandakar, Y. (2016). forecast: Forecasting functions for time series and linear
 models. Journal of Statistical Software, 26(3).
+
 Hyndman Rob J. and George Athanasopoulos. (2018). Forecasting: Principles and Practice. In
 Forecastin: Principles of Optimal Design.
 
