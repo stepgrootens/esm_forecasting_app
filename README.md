@@ -12,20 +12,6 @@ Experience Sampling Methodology (ESM) collects repeated reports of people's emot
 
 Multilevel regression examines associations in repeated observations nested within participants; forecasting predicts future observations from earlier measurements. Neither analysis alone establishes causality.
 
-## Project structure
-
-```text
-PIPS-groupproject-ESM-data/
-├── main.Rmd                    # Runnable project walkthrough
-├── app/
-│   ├── app.R                   # Shiny application
-│   └── R/                      # Preparation, exploration, forecasting, plotting, CV
-├── analysis/
-│   ├── main_analysis.R         # Statistical analysis script
-│   ├── functions.R             # Analysis helper functions
-│   └── results/                # Saved analysis outputs
-└── data/                       # Example ESM datasets
-```
 
 ## Getting started
 
@@ -64,6 +50,22 @@ The app supports:
 | `app/R/plotting.R` | Forecast visualisation |
 | `analysis/functions.R` | Multilevel analysis helper functions |
 | `analysis/main_analysis.R` | Standalone statistical analysis workflow |
+
+## Project structure
+
+```text
+PIPS-groupproject-ESM-data/
+├── main.Rmd                    # Runnable project walkthrough
+├── app/
+│   ├── app.R                   # Shiny application
+│   └── R/                      # Preparation, exploration, forecasting, plotting, CV
+├── analysis/
+│   ├── main_analysis.R         # Statistical analysis script
+│   ├── functions.R             # Analysis helper functions
+│   └── results/                # Saved analysis outputs
+└── data/                       # Example ESM datasets
+```
+
 
 ## Data source
 
