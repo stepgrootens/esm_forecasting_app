@@ -1,73 +1,383 @@
 ---
-title: "PIPS Group Project — Run the Analysis and App"
-author: "Antonia Gavanescu, Step Grootens, Aysen Aykut"
-output: html_document
+title: "Exploring and Forecasting Experience Sampling Data"
+subtitle: "PIPS Group Project"
+author: "Group members: Antonia Gavanescu, Step Grootens, Aysen Aykut"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    number_sections: true
+    theme: flatly
+    highlight: tango
 ---
 
+
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE,
+  fig.width = 8,
+  fig.height = 5
+)
 ```
 
-# Statistical analysis
 
-Load the analysis functions and Hoebeke ESM dataset.
+# Introduction
 
-```{r load-data}
-source("Analyses/functions.R")
+## Project overview
+
+Experience Sampling Methodology (ESM) is a research approach in which participants repeatedly report their experiences, emotions, thoughts, and behaviors in everyday life. Because measurements are collected multiple times per day, ESM data allow researchers to investigate how psychological experiences fluctuate over time.
+
+This project demonstrates two complementary approaches to analyzing ESM data:
+
+1. **Statistical analysis:** We use an existing ESM dataset to explore psychological variables and investigate their associations using multilevel regression models.
+2. **Time-series forecasting:** We developed an interactive Shiny application that allows users to explore an individual's ESM data and generate forecasts using three statistical models: Naïve forecasting, ARIMA, and ARIMAX.
+
+The two approaches address different questions. Multilevel regression examines associations between psychological variables across repeated observations and participants, whereas forecasting aims to predict future observations based on previously collected data.
+
+## Project structure
+
+The project is organized into three main sections:
+
+1. **Dataset and statistical analysis:** We introduce the dataset, explore its characteristics, and fit a multilevel regression model.
+2. **Interactive forecasting application:** We explain the forecasting models and demonstrate how to launch and use the Shiny app.
+3. **Limitations and conclusions:** We discuss methodological considerations, assumptions, and potential applications.
+
+
+# Dataset and Statistical Analysis
+
+## Dataset
+
+For the statistical analysis, we use dataset `0013_hoebeke`, available through the OpenESM database. The dataset contains repeated experience-sampling observations from multiple participants, allowing us to investigate both within-person fluctuations and between-person differences in psychological experiences.
+
+Our analysis focuses on variables related to negative psychological experiences and repetitive thinking, including negativity, perseverance, self-criticism, brooding, and replaying.
+
+We begin by inspecting the dataset and its variables, followed by descriptive analyses and a multilevel regression model examining associations with negativity.
+
+```{r load-analysis-functions}
+source("analysis/functions.R")
+```
+
+```{r load-dataset}
 hoebeke <- load_hoebeke_data("0013_hoebeke")
+
 data <- prepare_observation_order(hoebeke$data)
+
 rating_variables <- get_rating_variables(data)
 ```
 
-Show dataset size and descriptive statistics.
+## Dataset overview
 
-```{r descriptives}
-knitr::kable(data.frame(
-  Characteristic = c("Participants", "Observations", "Rating variables"),
-  Value = c(dplyr::n_distinct(data$id), nrow(data), length(rating_variables))
-))
+The following table summarizes the number of participants, observations, and psychological rating variables available in the dataset.
+
+```{r dataset-overview}
+dataset_overview <- data.frame(
+  Characteristic = c(
+    "Number of participants",
+    "Number of observations",
+    "Number of rating variables"
+  ),
+  Value = c(
+    dplyr::n_distinct(data$id),
+    nrow(data),
+    length(rating_variables)
+  )
+)
 
 knitr::kable(
-  get_descriptive_stats(data, variables = rating_variables),
-  digits = 2
+  dataset_overview,
+  caption = "Overview of the Hoebeke ESM dataset"
 )
 ```
 
-Show missingness and the negativity distribution.
 
-```{r missingness-and-distribution, fig.width=8, fig.height=5}
-missingness <- get_missingness(data)
-knitr::kable(missingness[missingness$variable %in% rating_variables, ], digits = 2)
-plot_distribution(data, variable = "negativity")
+## Descriptive analysis
+
+Before fitting statistical models, we examined the distributions and missingness of the psychological rating variables. These descriptive analyses provide an overview of the available observations and help identify potential data-quality concerns.
+
+### Descriptive statistics
+
+The following table presents the number of available observations, mean, standard deviation, median, minimum, and maximum for each psychological rating variable.
+
+```{r descriptive-statistics}
+descriptives <- get_descriptive_stats(
+  data,
+  variables = rating_variables
+)
+
+knitr::kable(
+  descriptives,
+  digits = 2,
+  col.names = c(
+    "Variable", "N", "Mean", "SD",
+    "Median", "Min", "Max"
+  ),
+  caption = "Descriptive statistics of the psychological rating variables"
+)
 ```
 
-Fit the multilevel regression and display its coefficients.
+### Missing observations
 
-```{r multilevel-model}
+ESM datasets commonly contain missing observations when participants do not complete scheduled assessments. Missing data can affect the number of observations available for statistical analyses.
+
+The following table summarizes missingness for the psychological rating variables.
+
+```{r missingness-table}
+missingness <- get_missingness(data)
+
+rating_missingness <- missingness[
+  missingness$variable %in% rating_variables,
+]
+
+knitr::kable(
+  rating_missingness,
+  digits = 2,
+  col.names = c(
+    "Variable",
+    "Missing observations",
+    "Missing (%)"
+  ),
+  caption = "Missingness in the psychological rating variables"
+)
+```
+
+### Distribution of negativity
+
+We visualized the distribution of negativity to examine how frequently different scores occurred across the observed assessments. The histogram combines observations from all participants and therefore provides a pooled descriptive overview rather than a participant-specific distribution.
+
+```{r negativity-distribution, fig.cap="Distribution of observed negativity scores", fig.width=8, fig.height=5}
+plot_distribution(
+  data,
+  variable = "negativity"
+)
+```
+
+## Multilevel regression analysis
+
+### Analytical approach
+
+Because experience-sampling observations are nested within participants, observations from the same individual cannot be assumed to be statistically independent. We therefore used a linear mixed-effects model with a random intercept for each participant.
+
+The outcome variable was **negativity**, and the predictors were **perseverance**, **self-criticism**, **brooding**, and **replaying**.
+
+To distinguish within-person from between-person associations, each predictor was decomposed into two components:
+
+- **Within-person component:** The difference between an individual's score at a particular assessment and their average score across assessments.
+- **Between-person component:** The individual's average score across assessments.
+
+The within-person effects examine whether individuals report higher or lower negativity than expected from their own average when their predictor scores deviate from their usual levels. The between-person effects examine whether individuals with higher average predictor scores tend to report higher or lower negativity than other individuals.
+
+The model also includes assessment day as a covariate when available.
+
+```{r fit-multilevel-model}
 multilevel_results <- fit_multilevel_model(
   data = data,
   outcome = "negativity",
-  predictors = c("perseverance", "self_criticism", "brooding", "replaying"),
+  predictors = c(
+    "perseverance",
+    "self_criticism",
+    "brooding",
+    "replaying"
+  ),
   include_day = TRUE,
   random_slope = FALSE
 )
+```
+
+### Model results
+
+The following table summarizes the observations and participants included in the fitted multilevel regression model.
+
+```{r model-sample}
+model_sample <- data.frame(
+  Characteristic = c(
+    "Observations included",
+    "Participants included"
+  ),
+  Value = c(
+    nrow(multilevel_results$model_data),
+    dplyr::n_distinct(multilevel_results$model_data$id)
+  )
+)
 
 knitr::kable(
-  multilevel_results$fixed_effects[, c("term", "estimate", "std.error", "conf.low", "conf.high")],
-  digits = 3
+  model_sample,
+  caption = "Sample included in the multilevel regression"
 )
 ```
 
-Plot the regression coefficients and 95% confidence intervals.
+The table below presents the estimated fixed effects and their 95% confidence intervals. Positive coefficients indicate that higher predictor values are associated with higher negativity, conditional on the other variables included in the model.
 
-```{r coefficient-plot, fig.width=9, fig.height=6}
-plot_coefficient_estimates(multilevel_results$fixed_effects)
+```{r multilevel-fixed-effects}
+fixed_effects <- multilevel_results$fixed_effects
+
+fixed_effects_table <- fixed_effects[
+  ,
+  c("term", "estimate", "std.error", "conf.low", "conf.high")
+]
+
+knitr::kable(
+  fixed_effects_table,
+  digits = 3,
+  col.names = c(
+    "Predictor",
+    "Estimate",
+    "SE",
+    "95% CI lower",
+    "95% CI upper"
+  ),
+  caption = "Fixed-effect estimates from the multilevel regression"
+)
 ```
 
-# Forecasting app
 
-Run this chunk **manually** in RStudio to open the Shiny app. It is skipped when knitting.
+### Interpretation of the multilevel regression
+
+The multilevel regression included 2,062 observations from 40 participants. All four predictors showed positive within-person associations with negativity, with 95% confidence intervals excluding zero.
+
+The strongest within-person association was observed for self-criticism (*b* = 0.401, 95% CI [0.360, 0.441]). This indicates that, when participants reported higher self-criticism than their own average, they also tended to report higher negativity at the same assessment, after accounting for the other predictors.
+
+Positive within-person associations were also observed for perseverance (*b* = 0.159, 95% CI [0.110, 0.208]), brooding (*b* = 0.137, 95% CI [0.090, 0.184]), and replaying (*b* = 0.079, 95% CI [0.034, 0.124]).
+
+At the between-person level, only self-criticism showed a clear positive association with negativity (*b* = 0.670, 95% CI [0.459, 0.882]). The confidence intervals for the other between-person predictors included zero.
+
+Assessment day was not clearly associated with negativity (*b* = -0.048, 95% CI [-0.242, 0.146]).
+
+Overall, these findings suggest that momentary fluctuations in repetitive negative thinking and self-criticism are associated with fluctuations in negativity. However, the analysis is observational and does not establish causal relationships.
+
+
+### Visualization of regression coefficients
+
+The figure below displays the estimated regression coefficients and their 95% confidence intervals. The dashed vertical line represents a coefficient of zero. Confidence intervals that do not cross zero indicate estimates that are distinguishable from zero at the corresponding confidence level.
+
+```{r coefficient-plot, fig.cap="Fixed-effect estimates and 95% confidence intervals from the multilevel regression", fig.width=9, fig.height=6}
+plot_coefficient_estimates(
+  multilevel_results$fixed_effects
+)
+```
+
+
+# Interactive Forecasting Application
+
+## Overview
+
+As the second component of this project, we developed an interactive R Shiny application for forecasting individual-level Experience Sampling Methodology (ESM) data.
+
+The application allows users to upload their own ESM dataset, select a psychological variable to forecast, and compare three forecasting approaches: Naïve forecasting, ARIMA, and ARIMAX.
+
+In addition to generating forecasts, the application provides tools for exploring the uploaded data and evaluating forecasting performance through time-series cross-validation.
+
+The application is designed to make forecasting methods accessible to users without requiring them to write R code themselves.
+
+
+## Forecasting models
+
+The application implements three forecasting models: Naïve, ARIMA, and ARIMAX. All three use historical observations to generate predictions of future values, but they differ in how they use the available information.
+
+### Naïve forecasting
+
+The Naïve model uses the most recently observed value as the prediction for all future time points. For example, if a participant's most recent reported sadness score was 40, the model would predict a score of 40 at every future assessment.
+
+This simple approach serves as a **baseline model** against which more complex forecasting methods can be evaluated.
+
+### ARIMA
+
+Autoregressive Integrated Moving Average (ARIMA) models use patterns in the historical values of a variable to forecast its future values.
+
+ARIMA combines three components:
+
+- **Autoregressive (AR):** Uses previous values of the target variable to predict future values.
+- **Integrated (I):** Applies differencing when needed to account for non-stationarity in the time series.
+- **Moving Average (MA):** Uses patterns in previous forecast errors to improve predictions.
+
+The application automatically selects an ARIMA specification based on the available data, rather than requiring users to specify the model parameters manually.
+
+### ARIMAX
+
+ARIMAX extends ARIMA by incorporating additional variables, known as **external predictors**.
+
+For example, when forecasting sadness, the model could use previous observations of sadness together with information about stress or anxiety.
+
+Unlike ARIMA, which models the target's own history, ARIMAX can also use relationships between the target and other psychological variables.
+
+Because future values of these external predictors are not available when making forecasts, the application assumes that their future values equal their historical means. This is a simplifying assumption that should be considered when interpreting the forecasts.
+
+### Comparison of forecasting approaches
+
+| Model | Information used | Main characteristic |
+|:------|:-----------------|:--------------------|
+| Naïve | Most recent target value | Simple baseline |
+| ARIMA | Historical target values | Models temporal patterns |
+| ARIMAX | Historical target values and external predictors | Incorporates additional psychological variables |
+
+All models generate forecasts from an individual's historical observations, rather than pooling data across participants.
+
+## Data requirements
+
+The application accepts user-uploaded CSV files containing individual-level ESM observations.
+
+The input data should meet the following requirements:
+
+- **One participant:** Each uploaded dataset should contain observations from a single participant.
+- **One row per assessment:** Each row represents one ESM measurement occasion, with observations ordered chronologically.
+- **Numeric variables:** The target variable and any selected external predictors must be numeric.
+- **Regular sampling:** Observations are assumed to occur at equally spaced intervals. Users specify the number of assessments (beeps) per day.
+- **Scale boundaries:** Users specify the minimum and maximum possible values of the target variable.
+
+The application can accommodate missing values in selected variables through last observation carried forward (LOCF) imputation. However, missing values at the beginning of a series cannot be imputed using this approach.
+
+These requirements are important because the forecasting models operate on a regularly spaced time series, and the application interprets forecasting horizons in terms of the specified number of assessments per day.
+
+## Application functionality
+
+The Shiny application provides three main functionalities.
+
+### Data exploration
+
+After uploading a dataset and selecting variables, users can explore the available observations through:
+
+- Descriptive statistics for the selected variables.
+- Missingness summaries.
+- Histograms showing the distribution of selected variables.
+- Pearson correlations between the target and selected external predictors.
+
+These exploratory summaries help users understand the characteristics of their data before fitting forecasting models.
+
+### Forecast generation
+
+Users can select Naïve, ARIMA, or ARIMAX to generate forecasts for the next seven days.
+
+The application displays the historical target observations alongside the forecasted values and their 95% prediction intervals. End-of-day markers help users identify the daily forecasting horizons.
+
+Users can also adjust the plot display to show the full target scale or focus on the observed and predicted values.
+
+### Forecast evaluation
+
+The application includes expanding-window time-series cross-validation to evaluate forecasting performance.
+
+The models are repeatedly fitted using historical observations and evaluated against subsequent observations that were not included in the training window.
+
+Forecasting accuracy is summarized using mean absolute error (MAE) for two forecasting horizons:
+
+- **1-day horizon:** Forecasting one day ahead.
+- **7-day horizon:** Forecasting seven days ahead.
+
+Users can specify the initial number of training days used for cross-validation. Lower MAE values indicate more accurate forecasts.
+
+Unlike a random train-test split, expanding-window cross-validation preserves the chronological ordering of the observations.
+
+## Launching the application
+
+The Shiny application is included in the `app/` directory of this repository.
+
+To launch the application, open `main.Rmd` in RStudio and run the following code chunk manually using the green arrow in the top-right corner of the chunk.
+
+The application will open in the RStudio Viewer or in a web browser.
 
 ```{r launch-shiny-app, eval=FALSE}
 shiny::runApp("app")
 ```
+
+
