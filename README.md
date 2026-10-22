@@ -65,7 +65,35 @@ PIPS-groupproject-ESM-data/
 │   └── results/                # Saved analysis outputs
 └── data/                       # Example ESM datasets
 ```
+## Required R Packages
 
+The following R packages are required to run the project:
+
+| Package | Used for |
+|---|---|
+| `shiny` | Interactive forecasting application |
+| `forecast` | Naïve, ARIMA, and ARIMAX forecasting |
+| `ggplot2` | Visualisations in both components |
+| `zoo` | Missing-data imputation (LOCF) |
+| `openesm` | Loading OpenESM datasets |
+| `dplyr` | Data manipulation and summaries |
+| `tidyr` | Data reshaping and preparation |
+| `purrr` | Iterative data processing |
+| `tibble` | Data frame handling |
+| `lme4` | Multilevel regression models |
+| `lmerTest` | Statistical inference for multilevel models |
+| `broom.mixed` | Extracting and formatting model results |
+| `performance` | Model diagnostics |
+
+Install all packages using:
+
+```r
+install.packages(c(
+  "shiny", "forecast", "ggplot2", "zoo",
+  "openesm", "dplyr", "tidyr", "purrr", "tibble",
+  "lme4", "lmerTest", "broom.mixed", "performance"
+))
+```
 
 ## Data source
 
