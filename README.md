@@ -99,4 +99,11 @@ install.packages(c(
 
 The statistical analysis uses the `0013_hoebeke` dataset from [OpenESM](https://openesmdata.org/). Consult the original dataset documentation for study details and data-use conditions (Hoebeke, Y., Blanchard, M. A., Contreras, A., & Heeren, A. (2022). An experience sampling measure of the key features of rumination. Clinical Neuropsychiatry, 19(5), 288–297. https://doi.org/10.36131/cnfioritieditore20220504)
 
+## Refrences
+Hyndman, R. J., & Khandakar, Y. (2016). forecast: Forecasting functions for time series and linear
+models. Journal of Statistical Software, 26(3).
+Hyndman Rob J. and George Athanasopoulos. (2018). Forecasting: Principles and Practice. In
+Forecastin: Principles of Optimal Design.
+
+
 
