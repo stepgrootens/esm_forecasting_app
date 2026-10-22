@@ -17,11 +17,17 @@ beep <- rep(1:n_beeps, times = n_days)
 # Helper: keep values between 0 and 100 and round to whole numbers
 clamp <- function(x) round(pmin(pmax(x, 0), 100))
 
-# Depressed: mostly low, with occasional "bad moments" (about 20%)
-bad_moment <- rbinom(n, 1, 0.20)
-depressed  <- ifelse(bad_moment == 1,
-                     runif(n, 35, 90),
-                     rexp(n, rate = 1 / 6))
+# Depressed: has a temporal pattern (autoregressive, AR(1)).
+# Each beep depends on the previous beep (0.7 = strength of carry-over),
+# so forecasting models should be able to pick this up.
+depressed    <- numeric(n)
+depressed[1] <- 10
+for (t in 2:n) {
+  depressed[t] <- 0.7 * depressed[t - 1] +
+    0.3 * runif(1, 0, 30) +
+    rnorm(1, 0, 5)
+  depressed[t] <- min(max(depressed[t], 0), 100)  # stay within 0-100
+}
 
 # Anxious: mostly low, with occasional spikes (about 10%)
 anxious_spike <- rbinom(n, 1, 0.10)
@@ -29,8 +35,8 @@ anxious <- ifelse(anxious_spike == 1,
                   runif(n, 30, 85),
                   rexp(n, rate = 1 / 4))
 
-# Stressed: spread out across the scale, a bit higher during bad moments
-stressed <- runif(n, 0, 80) + 10 * bad_moment
+# Stressed: spread out across the scale, a bit higher when more depressed
+stressed <- runif(n, 0, 80) + 0.5 * depressed
 
 # Affect valence: high on average, lower when depressed/anxious/stressed
 affect_valence <- 92 - 0.6 * depressed - 0.2 * anxious - 0.1 * stressed +
@@ -60,4 +66,8 @@ rating_cols <- c("depressed", "anxious", "stressed",
                  "affect_valence", "life_satisfaction")
 esm_out[rating_cols] <- lapply(esm_out[rating_cols], function(x) sprintf("%.1f", x))
 
+# Saved into the test_data folder (run this script from the repository root)
 write.csv(esm_out, "test_data/simulated_esm.csv", row.names = FALSE, quote = FALSE)
+
+# Quick check: lag-1 autocorrelation of depressed (should be clearly above 0)
+acf(esm_data$depressed, lag.max = 1, plot = FALSE)
