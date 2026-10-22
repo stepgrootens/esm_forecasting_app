@@ -99,6 +99,8 @@ install.packages(c(
 
 The statistical analysis uses the `0013_hoebeke` dataset from [OpenESM](https://openesmdata.org/). Consult the original dataset documentation for study details and data-use conditions (Hoebeke, Y., Blanchard, M. A., Contreras, A., & Heeren, A. (2022). An experience sampling measure of the key features of rumination. Clinical Neuropsychiatry, 19(5), 288–297. https://doi.org/10.36131/cnfioritieditore20220504)
 
+The test csv files used to test the app come from "0008_westhoff" dataset from [OpenESM](https://openesmdata.org/). Consult the original dataset documentation for study details and data-use conditions. (Westhoff, M., Heshmati, S., Siepe, B. S., Vogelbacher, C., Ciarrochi, J., Hayes, S. C., & Hofmann, S. G. (2024). Psychological flexibility and cognitive-affective processes in young adults’ daily lives. Scientific Reports, 14(1), 8182. https://doi.org/10.1038/s41598-024-58598-3)
+
 ## Refrences
 Hyndman, R. J., & Khandakar, Y. (2016). forecast: Forecasting functions for time series and linear
 models. Journal of Statistical Software, 26(3).
