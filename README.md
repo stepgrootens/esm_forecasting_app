@@ -39,6 +39,18 @@ The app supports:
 
 **Assumptions and limitations:** The forecasting workflow assumes equally spaced assessments. LOCF cannot fill missing values at the start of a series. For ARIMAX, future predictor values are replaced by historical means, which is a simplifying assumption. Forecasts are participant-specific and should not be interpreted as causal effects.
 
+## Simulated test data
+
+`simulated_test_data.R` creates `test_data/simulated_esm.csv`: 21 days × 5 beeps
+(105 rows) with the same columns as `example_esm.csv`, all rated 0–100.
+
+`depressed` has a temporal pattern (AR(1): 70% carry-over from the previous beep),
+so forecasts of it should beat a naive forecast. `anxious` is random noise with
+no pattern. The other variables depend on `depressed`. Use it to check that the
+app's forecasts pick up real patterns.
+
+Run from the repository root, and set "Observations per day" to 5 in the app.
+
 ## Code organisation
 
 | File | Purpose |
