@@ -21,6 +21,12 @@ knitr::opts_chunk$set(
   fig.width = 8,
   fig.height = 5
 )
+
+install.packages(c(
+  "shiny", "forecast", "ggplot2", "zoo",
+  "openesm", "dplyr", "tidyr", "purrr", "tibble",
+  "lme4", "lmerTest", "broom.mixed", "performance"
+)) # incase you didn't see these are needed in the README file.
 ```
 
 
