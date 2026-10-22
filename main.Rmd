@@ -1,0 +1,73 @@
+---
+title: "PIPS Group Project — Run the Analysis and App"
+author: "Antonia Gavanescu, Step Grootens, Aysen Aykut"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+# Statistical analysis
+
+Load the analysis functions and Hoebeke ESM dataset.
+
+```{r load-data}
+source("Analyses/functions.R")
+hoebeke <- load_hoebeke_data("0013_hoebeke")
+data <- prepare_observation_order(hoebeke$data)
+rating_variables <- get_rating_variables(data)
+```
+
+Show dataset size and descriptive statistics.
+
+```{r descriptives}
+knitr::kable(data.frame(
+  Characteristic = c("Participants", "Observations", "Rating variables"),
+  Value = c(dplyr::n_distinct(data$id), nrow(data), length(rating_variables))
+))
+
+knitr::kable(
+  get_descriptive_stats(data, variables = rating_variables),
+  digits = 2
+)
+```
+
+Show missingness and the negativity distribution.
+
+```{r missingness-and-distribution, fig.width=8, fig.height=5}
+missingness <- get_missingness(data)
+knitr::kable(missingness[missingness$variable %in% rating_variables, ], digits = 2)
+plot_distribution(data, variable = "negativity")
+```
+
+Fit the multilevel regression and display its coefficients.
+
+```{r multilevel-model}
+multilevel_results <- fit_multilevel_model(
+  data = data,
+  outcome = "negativity",
+  predictors = c("perseverance", "self_criticism", "brooding", "replaying"),
+  include_day = TRUE,
+  random_slope = FALSE
+)
+
+knitr::kable(
+  multilevel_results$fixed_effects[, c("term", "estimate", "std.error", "conf.low", "conf.high")],
+  digits = 3
+)
+```
+
+Plot the regression coefficients and 95% confidence intervals.
+
+```{r coefficient-plot, fig.width=9, fig.height=6}
+plot_coefficient_estimates(multilevel_results$fixed_effects)
+```
+
+# Forecasting app
+
+Run this chunk **manually** in RStudio to open the Shiny app. It is skipped when knitting.
+
+```{r launch-shiny-app, eval=FALSE}
+shiny::runApp("app")
+```
