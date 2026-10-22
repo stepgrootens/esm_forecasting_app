@@ -1,6 +1,6 @@
 
 # ============================================================
-# ESM Forecasting App — Version 1
+# ESM Forecasting App — Version 2
 # ============================================================
 # Upload individual-level ESM data, generate forecasts,
 # and display forecasts.
@@ -23,6 +23,7 @@ library(zoo)
 source("R/data_preparation.R")
 source("R/forecasting.R")
 source("R/plotting.R")
+source("R/cross_validation.R")
 
 
 # 2. Define the user interface -------------------------------
@@ -103,6 +104,21 @@ ui <- fluidPage(
       
       hr(),
       
+      h4("4. Evaluate forecasting accuracy"),
+      
+      numericInput(
+        "initial_training_days",
+        "Initial training window (days)",
+        value = 7,
+        min = 1,
+        step = 1
+      ),
+      
+      actionButton(
+        "calculate_accuracy",
+        "Calculate accuracy"
+      )
+      
     ),
     
     mainPanel(
@@ -135,6 +151,12 @@ ui <- fluidPage(
       plotOutput("forecast_plot", height = "450px"),
       
       hr(),
+      
+      h4("Cross-validation results"),
+      
+      uiOutput("cv_status"),
+      
+      tableOutput("cv_results")
       
     )
     
@@ -443,6 +465,8 @@ server <- function(input, output, session) {
   
   forecast_result <- reactiveVal(NULL)
   
+  # Store cross-validation results separately from forecasts
+  cv_result <- reactiveVal(NULL)
   
   # Clear old forecasts when relevant inputs change.
   observeEvent(
@@ -458,6 +482,149 @@ server <- function(input, output, session) {
     },
     ignoreInit = TRUE
   )
+  
+  
+  # Clear outdated accuracy results when relevant inputs change
+  observeEvent(
+    list(
+      input$data_file,
+      input$target,
+      input$predictors,
+      input$model,
+      input$beeps_per_day,
+      input$initial_training_days
+    ),
+    {
+      cv_result(NULL)
+    },
+    ignoreInit = TRUE
+  )
+  
+  
+  # Run cross-validation when requested
+  observeEvent(input$calculate_accuracy, {
+    
+    cv_result(NULL)
+    
+    req(uploaded_data(), input$target, input$model)
+    
+    validation_error <- validation_message()
+    
+    if (!is.null(validation_error)) {
+      showNotification(validation_error, type = "error")
+      return()
+    }
+    
+    if (input$model == "ARIMAX" &&
+        length(input$predictors) == 0) {
+      
+      showNotification(
+        "Please select at least one external predictor for ARIMAX.",
+        type = "error"
+      )
+      
+      return()
+    }
+    
+    # Only ARIMAX uses external predictors
+    model_predictors <- if (input$model == "ARIMAX") {
+      input$predictors
+    } else {
+      character(0)
+    }
+    
+    selected_variables <- unique(
+      c(input$target, model_predictors)
+    )
+    
+    # Check whether LOCF approval is required
+    variables_with_na <- names(
+      uploaded_data()[selected_variables]
+    )[
+      vapply(
+        uploaded_data()[selected_variables],
+        anyNA,
+        logical(1)
+      )
+    ]
+    
+    if (!all(
+      variables_with_na %in% approved_locf_variables()
+    )) {
+      
+      showNotification(
+        "Please accept missing-value handling before calculating accuracy.",
+        type = "warning"
+      )
+      
+      return()
+    }
+    
+    # Run the CV function and handle errors
+    result <- tryCatch({
+      
+      prepared <- prepare_esm_data(
+        uploaded_data(),
+        input$target,
+        model_predictors
+      )
+      
+      cross_validate_esm(
+        data = prepared$data,
+        original_target = prepared$original_target,
+        target = input$target,
+        predictors = model_predictors,
+        model = input$model,
+        beeps_per_day = input$beeps_per_day,
+        initial_training_days = input$initial_training_days
+      )
+      
+    }, error = function(e) {
+      
+      showNotification(
+        conditionMessage(e),
+        type = "error",
+        duration = NULL
+      )
+      
+      NULL
+    })
+    
+    if (!is.null(result)) {
+      cv_result(result)
+    }
+    
+  })
+  
+  
+  # Display cross-validation status
+  output$cv_status <- renderUI({
+    result <- cv_result()
+    if (is.null(result)) return(p("Click 'Calculate accuracy' to evaluate the model."))
+    p("Cross-validation completed: ", result$total_model_fits,
+      " fits attempted; ", result$fit_failures, " failures.")
+  })
+  
+  # Display accuracy table
+  output$cv_results <- renderTable({
+    
+    req(cv_result())
+    
+    results <- cv_result()$results
+    
+    data.frame(
+      Horizon = results$horizon,
+      MAE = ifelse(
+        is.na(results$MAE),
+        "Not available",
+        sprintf("%.2f", results$MAE)
+      ),
+      `Eligible CV origins` = results$eligible_origins,
+      `Valid comparisons` = results$valid_comparisons,
+      check.names = FALSE
+    )
+    
+  }, striped = TRUE, bordered = TRUE, spacing = "s")
   
   
   observeEvent(input$generate_forecast, {
