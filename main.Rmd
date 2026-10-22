@@ -21,14 +21,7 @@ knitr::opts_chunk$set(
   fig.width = 8,
   fig.height = 5
 )
-
-install.packages(c(
-  "shiny", "forecast", "ggplot2", "zoo",
-  "openesm", "dplyr", "tidyr", "purrr", "tibble",
-  "lme4", "lmerTest", "broom.mixed", "performance"
-)) # incase you didn't see these are needed in the README file.
 ```
-
 
 # Introduction
 
@@ -51,19 +44,38 @@ The project is organized into three main sections:
 2. **Interactive forecasting application:** We explain the forecasting models and demonstrate how to launch and use the Shiny app.
 3. **Limitations and conclusions:** We discuss methodological considerations, assumptions, and potential applications.
 
+## Required packages
+
+In case you didn't see these are needed in the README file. The code below checks whether each required R package is installed and installs only the ones that are missing. Packages that are already installed are skipped, so knitting stays fast.
+
+The `repos` argument sets the CRAN mirror to download from. This is needed because knitting runs non-interactively, so R cannot ask the user to pick a mirror.
+
+```{r install-packages}
+required_packages <- c(
+  "shiny", "forecast", "ggplot2", "zoo",
+  "openesm", "dplyr", "tidyr", "purrr", "tibble",
+  "lme4", "lmerTest", "broom.mixed", "performance"
+)
+
+for (package in required_packages) {
+  if (!requireNamespace(package, quietly = TRUE)) {
+    install.packages(package, repos = "https://cloud.r-project.org")
+  }
+}
+```
 
 # Dataset and Statistical Analysis
 
 ## Dataset
 
-For the statistical analysis, we use dataset `0013_hoebeke`, available through the OpenESM database. The dataset contains repeated experience-sampling observations from multiple participants, allowing us to investigate both within-person fluctuations and between-person differences in psychological experiences.
+For the statistical analysis, we use dataset `0013_hoebeke`(Hoebeke et al., 2022), available through the OpenESM database. The dataset contains repeated experience-sampling observations from multiple participants, allowing us to investigate both within-person fluctuations and between-person differences in psychological experiences.
 
 Our analysis focuses on variables related to negative psychological experiences and repetitive thinking, including negativity, perseverance, self-criticism, brooding, and replaying.
 
 We begin by inspecting the dataset and its variables, followed by descriptive analyses and a multilevel regression model examining associations with negativity.
 
 ```{r load-analysis-functions}
-source("analysis/functions.R")
+source("Analyses/functions.R")
 ```
 
 ```{r load-dataset}
@@ -177,6 +189,12 @@ The within-person effects examine whether individuals report higher or lower neg
 
 The model also includes assessment day as a covariate when available.
 
+Because the model includes only a random intercept, it allows participants to 
+differ in their average negativity, but assumes that the within-person associations
+are the same for every participant. All associations are concurrent: predictors
+and negativity are measured at the same assessment, so the model does not tell
+us which came first.
+
 ```{r fit-multilevel-model}
 multilevel_results <- fit_multilevel_model(
   data = data,
@@ -213,6 +231,15 @@ knitr::kable(
   caption = "Sample included in the multilevel regression"
 )
 ```
+```{r icc}
+icc_value <- if (!is.null(multilevel_results$icc)) {
+  multilevel_results$icc$ICC_adjusted
+} else {
+  NA_real_
+}
+```
+
+The intraclass correlation (ICC) of the model was `r round(icc_value, 2)`. This means that, after accounting for the predictors, about `r round(100 * icc_value)`% of the remaining variance in negativity lies between participants (stable differences in people's average level), and the rest lies within participants across assessments. A non-trivial ICC confirms that observations from the same person are not independent, which is why a multilevel model is needed.
 
 The table below presents the estimated fixed effects and their 95% confidence intervals. Positive coefficients indicate that higher predictor values are associated with higher negativity, conditional on the other variables included in the model.
 
@@ -374,11 +401,42 @@ Users can specify the initial number of training days used for cross-validation.
 
 Unlike a random train-test split, expanding-window cross-validation preserves the chronological ordering of the observations.
 
+## Test data sets
+
+The `test_data` folder contains data sets you can upload in the app (step 1, "Choose a CSV file") to try it out. All have one participant measured over 21 days with 5 beeps per day (105 observations), rated 0–100 on `depressed`, `anxious`, `stressed`, `affect_valence` and `life_satisfaction`.
+
+- `example_esm.csv`: a basic example data set.
+- `flat_predictor_test.csv`: the example data plus a `flat_predictor` column that never changes, to check how the app handles a predictor without variation.
+- `esm_locf_test_participant_68986.csv`: participant data with some missing values, to check how the app handles missing data.
+- `simulated_esm.csv`: simulated data, created by `simulated_test_data.R`.
+
+In the simulated data, only `depressed` has a temporal pattern (AR(1): each beep carries over 70% of the previous beep). `anxious` is random noise. A working forecasting model should therefore predict `depressed` clearly better than `anxious`. Set "Observations per day" to 5 when uploading any of these files.
+
+Run the simulation script and show the first rows of the simulated data.
+
+```{r simulated-data}
+source("simulated_test_data.R")
+knitr::kable(head(esm_data))
+```
+
+Compare the lag-1 autocorrelation of `depressed` (temporal pattern) and `anxious` (no pattern).
+
+```{r simulated-autocorrelation}
+knitr::kable(data.frame(
+  Variable = c("depressed", "anxious"),
+  `Lag-1 autocorrelation` = c(
+    acf(esm_data$depressed, lag.max = 1, plot = FALSE)$acf[2],
+    acf(esm_data$anxious, lag.max = 1, plot = FALSE)$acf[2]
+  ),
+  check.names = FALSE
+), digits = 2)
+```
+
 ## Launching the application
 
 The Shiny application is included in the `app/` directory of this repository.
 
-To launch the application, open `main.Rmd` in RStudio and run the following code chunk manually using the green arrow in the top-right corner of the chunk.
+To launch the application, open `main.Rmd` in RStudio and run the following code chunk manually using the green arrow in the top-right corner of the chunk. To try it out, upload `test_data/simulated_esm.csv` (created above) and set *Observations per day* to 5, or upload one of the example files in `test_data/`.
 
 The application will open in the RStudio Viewer or in a web browser.
 
@@ -386,4 +444,31 @@ The application will open in the RStudio Viewer or in a web browser.
 shiny::runApp("app")
 ```
 
+# Limitations
 
+**Multilevel regression**
+
+- The analysis is observational and concurrent, so it cannot establish causality or temporal order between repetitive thinking and negativity.
+- The model includes only a random intercept, assuming the within-person associations are identical across participants.
+- Assessments with missing values were excluded (listwise deletion), which assumes missed assessments do not differ systematically from completed ones.
+- Negativity is measured on a bounded scale and may be skewed, which can affect the normality assumption of the linear model.
+- Between-person estimates are based on a relatively small number of participants and are therefore less precise.
+
+**Forecasting application**
+
+- The models assume equally spaced observations, but ESM data contain an overnight gap between the last beep of one day and the first beep of the next.
+- The models do not account for time-of-day patterns (e.g., systematically higher scores in the evening).
+- LOCF imputation assumes that a missed assessment equals the previous one, which can understate variability, and cannot fill missing values at the start of a series.
+- ARIMAX replaces future predictor values with their historical means, so external predictors add little forecasting information.
+- Forecasts and prediction intervals are not constrained to the response scale.
+- Individual ESM series are often short, which limits how much temporal structure models can reliably detect.
+
+# References
+
+Hoebeke, Y., Blanchard, M. A., Contreras, A., & Heeren, A. (2022). An experience sampling measure of the key features of rumination. *Clinical Neuropsychiatry, 19*(5), 288–297. https://doi.org/10.36131/cnfioritieditore20220504
+
+Hyndman, R. J., & Athanasopoulos, G. (2018). *Forecasting: Principles and practice* (2nd ed.). OTexts. https://otexts.com/fpp2/
+
+Hyndman, R. J., & Khandakar, Y. (2008). Automatic time series forecasting: The forecast package for R. *Journal of Statistical Software, 27*(3), 1–22. https://doi.org/10.18637/jss.v027.i03
+
+Westhoff, M., Heshmati, S., Siepe, B. S., Vogelbacher, C., Ciarrochi, J., Hayes, S. C., & Hofmann, S. G. (2024). Psychological flexibility and cognitive-affective processes in young adults' daily lives. *Scientific Reports, 14*(1), 8182. https://doi.org/10.1038/s41598-024-58598-3
