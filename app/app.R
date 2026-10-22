@@ -1,9 +1,9 @@
 
 # ============================================================
-# ESM Forecasting App — Version 3
+# ESM Forecasting App — Version 4
 # ============================================================
 # Upload individual-level ESM data, generate forecasts,
-# and display forecasts.
+# with optional model evaluation and data exploration.
 #
 # Data requirements:
 # - One participant per CSV file
@@ -24,6 +24,7 @@ source("R/data_preparation.R")
 source("R/forecasting.R")
 source("R/plotting.R")
 source("R/cross_validation.R")
+source("R/data_exploration.R")
 
 
 # 2. Define the user interface -------------------------------
@@ -129,6 +130,27 @@ ui <- fluidPage(
       
       hr(),
       
+      h3("Explore your data"),
+      
+      p(
+        "Explore the distributions and missingness of your selected target",
+        "and predictors before generating forecasts.",
+        "All summaries use the original observed data, before imputation."
+      ),
+      
+      h4("Descriptive statistics"),
+      tableOutput("descriptive_stats"),
+      
+      h4("Missing observations"),
+      tableOutput("missingness_stats"),
+      
+      h4("Distribution of the target"),
+      plotOutput("target_distribution", height = "300px"),
+      
+      uiOutput("correlation_section"),
+      
+      hr(),
+      
       h4("Data information"),
       
       verbatimTextOutput("data_info"),
@@ -180,6 +202,182 @@ server <- function(input, output, session) {
     )
     
   })
+  
+  
+  # ----------------------------------------------------------
+  # DATA EXPLORATION
+  # ----------------------------------------------------------
+  
+  # Variables selected for exploration
+  exploration_variables <- reactive({
+    
+    req(uploaded_data(), input$target)
+    
+    unique(c(input$target, input$predictors))
+  })
+  
+  # Descriptive statistics
+  output$descriptive_stats <- renderTable({
+    
+    data <- uploaded_data()
+    variables <- exploration_variables()
+    
+    req(length(variables) > 0)
+    
+    validate(
+      need(
+        all(variables %in% names(data)),
+        "Please select valid variables."
+      ),
+      need(
+        all(vapply(data[variables], is.numeric, logical(1))),
+        "Selected variables must be numeric."
+      )
+    )
+    
+    calculate_descriptive_stats(data, variables)
+    
+  }, digits = 2, rownames = FALSE)
+  
+  # Missingness summary
+  output$missingness_stats <- renderTable({
+    
+    data <- uploaded_data()
+    variables <- exploration_variables()
+    
+    req(length(variables) > 0)
+    
+    validate(
+      need(
+        all(variables %in% names(data)),
+        "Please select valid variables."
+      )
+    )
+    
+    calculate_missingness(data, variables)
+    
+  }, digits = 2, rownames = FALSE)
+  
+  # Target distribution
+  output$target_distribution <- renderPlot({
+    
+    data <- uploaded_data()
+    
+    req(input$target)
+    
+    validate(
+      need(
+        input$target %in% names(data),
+        "Please select a valid target."
+      ),
+      need(
+        is.numeric(data[[input$target]]),
+        "The target must be numeric."
+      ),
+      need(
+        any(!is.na(data[[input$target]])),
+        "The target has no observed values."
+      )
+    )
+    
+    plot_target_distribution(
+      data = data,
+      target = input$target
+    )
+  })
+  
+  
+  # ----------------------------------------------------------
+  # TARGET–PREDICTOR CORRELATIONS
+  # ----------------------------------------------------------
+  
+  output$correlation_section <- renderUI({
+    
+    req(uploaded_data())
+    
+    # Only display when external predictors are selected
+    if (length(input$predictors) == 0) {
+      return(NULL)
+    }
+    
+    tagList(
+      h4("Correlations with selected external predictors"),
+      
+      tableOutput("target_correlations"),
+      
+      p(
+        strong("How to interpret these correlations: "),
+        "Pearson's r describes the strength and direction of the",
+        "linear relationship between the target and each selected",
+        "predictor at the same observation.",
+        "Values closer to -1 or +1 indicate stronger linear",
+        "relationships, while values near 0 indicate weaker",
+        "linear relationships."
+      ),
+      
+      p(
+        strong("Important: "),
+        "A strong correlation does not necessarily mean that a",
+        "variable will improve ARIMAX forecasting accuracy.",
+        "Correlations describe associations between observed values,",
+        "whereas forecasting requires predicting future values.",
+        "In this app, future predictor values are assumed to equal",
+        "their historical means, which further limits what these",
+        "correlations tell us about forecasting performance."
+      ),
+      
+      p(
+        em(
+          "Correlations are calculated using original observations",
+          "before imputation. Only observations with available",
+          "values for both variables are included."
+        )
+      )
+    )
+  })
+  
+  
+  output$target_correlations <- renderTable({
+    
+    data <- uploaded_data()
+    
+    req(input$target)
+    req(length(input$predictors) > 0)
+    
+    variables <- c(input$target, input$predictors)
+    
+    validate(
+      need(
+        all(variables %in% names(data)),
+        "Please select valid variables."
+      ),
+      need(
+        all(vapply(data[variables], is.numeric, logical(1))),
+        "The target and predictors must be numeric."
+      ),
+      need(
+        !input$target %in% input$predictors,
+        "The target cannot also be a predictor."
+      )
+    )
+    
+    results <- calculate_target_correlations(
+      data = data,
+      target = input$target,
+      predictors = input$predictors
+    )
+    
+    names(results) <- c(
+      "Target",
+      "External predictor",
+      "Pearson's r",
+      "Complete pairs"
+    )
+    
+    results
+    
+  }, digits = 3, rownames = FALSE)
+  
   
   
   # 3.2 Update the variable selection menus
